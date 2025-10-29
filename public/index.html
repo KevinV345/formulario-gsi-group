@@ -126,8 +126,8 @@
         <label>5. Edad:</label>
         <input type="number" name="edad" required placeholder="Edad en años">
 
-        <label>6. Collage de fotos (4 fotos):</label>
-        <input type="file" id="fotos" name="fotos" multiple accept="image/*" required>
+        <label>6. Collage de fotos:</label>
+        <input type="file" id="foto" name="foto" accept="image/*" required>
 
         <label>7. Nombre del dibujo:</label>
         <input name="dibujo" required placeholder="Título del dibujo">
@@ -151,16 +151,19 @@
 
     <script>
         const form = document.getElementById('form');
-        const fotosInput = document.getElementById('fotos');
+        const fotoInput = document.getElementById('foto');
         const submitBtn = document.getElementById('submitBtn');
+        const categoriaSelect = document.getElementById('categoria');
+        const premioSelect = document.getElementById('premio');
+        const premioLabel = document.getElementById('premioLabel');
 
         form.addEventListener('submit', async e => {
             e.preventDefault();
             submitBtn.disabled = true;
 
-            const files = fotosInput.files;
-            if (!files || files.length !== 4) {
-                alert('Debes seleccionar exactamente 4 fotos.');
+            const file = fotoInput.files[0];
+            if (!file) {
+                alert('Debes seleccionar una foto.');
                 submitBtn.disabled = false;
                 return;
             }
@@ -183,19 +186,14 @@
                 alert(json.msg || 'Enviado correctamente');
                 submitBtn.disabled = false;
                 form.reset();
-                // Ocultar premio nuevamente al resetear
-                document.getElementById('premio').style.display = 'none';
-                document.getElementById('premioLabel').style.display = 'none';
+                premioSelect.style.display = 'none';
+                premioLabel.style.display = 'none';
             } catch (err) {
                 console.error(err);
                 alert('Error al enviar el formulario');
                 submitBtn.disabled = false;
             }
         });
-
-        const categoriaSelect = document.getElementById('categoria');
-        const premioSelect = document.getElementById('premio');
-        const premioLabel = document.getElementById('premioLabel');
 
         categoriaSelect.addEventListener('change', () => {
             const cat = categoriaSelect.value;
@@ -227,6 +225,7 @@
             }
         });
     </script>
+
 </body>
 
 </html>

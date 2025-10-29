@@ -55,10 +55,10 @@ app.use(cors());
 app.use(express.json());
 
 // --- Guardar formulario ---
-app.post("/api/form", upload.array("fotos", 4), async (req, res) => {
+app.post("/api/form", upload.single("foto"), async (req, res) => {
   try {
-    if (!req.files || req.files.length !== 4)
-      return res.status(400).json({ ok: false, msg: "Debes subir exactamente 4 fotos." });
+    if (!req.file)
+      return res.status(400).json({ ok: false, msg: "Debes subir una foto." });
 
     const { nombreColaborador, cedula, nombreNino, parentesco, edad, dibujo, valor, categoria, premio } = req.body;
 
@@ -70,27 +70,26 @@ app.post("/api/form", upload.array("fotos", 4), async (req, res) => {
 
     const respuesta_id = result.rows[0].id;
 
-    for (const f of req.files) {
-      const imgSharp = sharp(f.buffer);
-      const metadata = await imgSharp.metadata();
-      let resizedBuffer = f.buffer;
+    // Redimensionar si es necesario
+    const imgSharp = sharp(req.file.buffer);
+    const metadata = await imgSharp.metadata();
+    let resizedBuffer = req.file.buffer;
 
-      if (metadata.width > 768 || metadata.height > 768) {
-        resizedBuffer = await imgSharp
-          .resize({
-            width: metadata.width > metadata.height ? 768 : null,
-            height: metadata.height >= metadata.width ? 768 : null,
-            fit: "inside",
-          })
-          .jpeg({ quality: 80 })
-          .toBuffer();
-      }
-
-      await pool.query("INSERT INTO imagenes (respuesta_id, imagen) VALUES ($1, $2)", [
-        respuesta_id,
-        resizedBuffer,
-      ]);
+    if (metadata.width > 768 || metadata.height > 768) {
+      resizedBuffer = await imgSharp
+        .resize({
+          width: metadata.width > metadata.height ? 768 : null,
+          height: metadata.height >= metadata.width ? 768 : null,
+          fit: "inside",
+        })
+        .jpeg({ quality: 80 })
+        .toBuffer();
     }
+
+    await pool.query("INSERT INTO imagenes (respuesta_id, imagen) VALUES ($1, $2)", [
+      respuesta_id,
+      resizedBuffer,
+    ]);
 
     res.json({ ok: true, msg: "Datos guardados correctamente" });
   } catch (err) {
@@ -104,7 +103,7 @@ app.get("/api/data", async (req, res) => {
   const respuestas = await pool.query("SELECT * FROM respuestas ORDER BY id DESC");
   for (const r of respuestas.rows) {
     const imgs = await pool.query("SELECT id FROM imagenes WHERE respuesta_id=$1", [r.id]);
-    r.fotos = imgs.rows.map(i => `/api/img/${i.id}`);
+    r.foto = imgs.rows.length ? `/api/img/${imgs.rows[0].id}` : null;
   }
   res.json(respuestas.rows);
 });
@@ -124,7 +123,7 @@ app.get("/admin", async (req, res) => {
   let rows = "";
   for (const [i, r] of respuestas.rows.entries()) {
     const imgs = await pool.query("SELECT id FROM imagenes WHERE respuesta_id=$1", [r.id]);
-    const links = imgs.rows.map(im => `<a href="/api/img/${im.id}" target="_blank">📷</a>`).join(" ");
+    const link = imgs.rows.length ? `<a href="/api/img/${imgs.rows[0].id}" target="_blank">📷</a>` : "";
     rows += `
       <tr>
         <td>${i + 1}</td>
@@ -138,7 +137,7 @@ app.get("/admin", async (req, res) => {
         <td>${r.categoria || ""}</td>
         <td>${r.premio || ""}</td>
         <td>${r.fecha.toISOString().split("T")[0]}</td>
-        <td>${links}</td>
+        <td>${link}</td>
       </tr>`;
   }
 
@@ -158,13 +157,13 @@ app.get("/admin", async (req, res) => {
     <table>
       <tr>
         <th>#</th><th>Colaborador</th><th>Cédula</th><th>Niño(a)</th><th>Parentesco</th>
-        <th>Edad</th><th>Dibujo</th><th>Valor</th><th>Categoría</th><th>Premio</th><th>Fecha</th><th>Fotos</th>
+        <th>Edad</th><th>Dibujo</th><th>Valor</th><th>Categoría</th><th>Premio</th><th>Fecha</th><th>Foto</th>
       </tr>${rows}
     </table>
   </body></html>`);
 });
 
-// --- Exportar Excel con 4 hipervínculos ---
+// --- Exportar Excel con 1 foto ---
 app.get("/admin/export", async (req, res) => {
   try {
     const respuestas = (await pool.query("SELECT * FROM respuestas ORDER BY id")).rows;
@@ -183,15 +182,12 @@ app.get("/admin/export", async (req, res) => {
       { header: "Categoría", key: "categoria", width: 15 },
       { header: "Premio", key: "premio", width: 20 },
       { header: "Fecha", key: "fecha", width: 15 },
-      { header: "Foto 1", key: "foto1", width: 30 },
-      { header: "Foto 2", key: "foto2", width: 30 },
-      { header: "Foto 3", key: "foto3", width: 30 },
-      { header: "Foto 4", key: "foto4", width: 30 },
+      { header: "Foto", key: "foto1", width: 30 },
     ];
 
     for (let i = 0; i < respuestas.length; i++) {
       const r = respuestas[i];
-      const imgs = await pool.query("SELECT id FROM imagenes WHERE respuesta_id=$1 LIMIT 4", [r.id]);
+      const imgs = await pool.query("SELECT id FROM imagenes WHERE respuesta_id=$1 LIMIT 1", [r.id]);
       const baseUrl = `${req.protocol}://${req.get("host")}/api/img/`;
 
       const rowValues = {
@@ -206,11 +202,8 @@ app.get("/admin/export", async (req, res) => {
         categoria: r.categoria,
         premio: r.premio,
         fecha: r.fecha.toISOString().split("T")[0],
+        foto1: imgs.rows.length ? { text: "Foto", hyperlink: baseUrl + imgs.rows[0].id } : "",
       };
-
-      imgs.rows.forEach((img, idx) => {
-        rowValues[`foto${idx + 1}`] = { text: `Foto ${idx + 1}`, hyperlink: baseUrl + img.id };
-      });
 
       sheet.addRow(rowValues);
     }
@@ -235,6 +228,5 @@ app.get("/admin/erase/cuidado/87654321", async (req, res) => {
     res.status(500).json({ ok: false, msg: "Error al eliminar las tablas" });
   }
 });
-
 
 app.listen(PORT, () => console.log(`Servidor en http://localhost:${PORT}`));
