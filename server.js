@@ -7,9 +7,10 @@ import sharp from "sharp";
 const { Pool } = pkg;
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
 app.use(express.static("public"));
+
 // --- Configura PostgreSQL ---
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL || "postgresql://usuario:avlUBxKlYBmWlbNkHcpljYHJgow7x8Py@dpg-d4175l63jp1c73cm7ktg-a.oregon-postgres.render.com/basedatos_cxga",
@@ -29,6 +30,7 @@ const initDB = async () => {
       dibujo TEXT,
       valor TEXT,
       categoria TEXT,
+      premio TEXT,
       fecha TIMESTAMP DEFAULT NOW()
     );
   `);
@@ -45,7 +47,7 @@ initDB();
 
 // --- Configuración de Multer (límite 5MB por imagen) ---
 const upload = multer({
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+  limits: { fileSize: 5 * 1024 * 1024 },
   storage: multer.memoryStorage(),
 });
 
@@ -58,21 +60,19 @@ app.post("/api/form", upload.array("fotos", 4), async (req, res) => {
     if (!req.files || req.files.length !== 4)
       return res.status(400).json({ ok: false, msg: "Debes subir exactamente 4 fotos." });
 
-    const { nombreColaborador, cedula, nombreNino, parentesco, edad, dibujo, valor, categoria } = req.body;
+    const { nombreColaborador, cedula, nombreNino, parentesco, edad, dibujo, valor, categoria, premio } = req.body;
 
     const result = await pool.query(
-      `INSERT INTO respuestas (nombreColaborador, cedula, nombreNino, parentesco, edad, dibujo, valor, categoria)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
-      [nombreColaborador, cedula, nombreNino, parentesco, edad, dibujo, valor, categoria]
+      `INSERT INTO respuestas (nombreColaborador, cedula, nombreNino, parentesco, edad, dibujo, valor, categoria, premio)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
+      [nombreColaborador, cedula, nombreNino, parentesco, edad, dibujo, valor, categoria, premio]
     );
 
     const respuesta_id = result.rows[0].id;
 
     for (const f of req.files) {
-      // Redimensionar si es necesario
       const imgSharp = sharp(f.buffer);
       const metadata = await imgSharp.metadata();
-
       let resizedBuffer = f.buffer;
 
       if (metadata.width > 768 || metadata.height > 768) {
@@ -82,7 +82,7 @@ app.post("/api/form", upload.array("fotos", 4), async (req, res) => {
             height: metadata.height >= metadata.width ? 768 : null,
             fit: "inside",
           })
-          .jpeg({ quality: 80 }) // opcional: comprimir un poco
+          .jpeg({ quality: 80 })
           .toBuffer();
       }
 
@@ -136,6 +136,7 @@ app.get("/admin", async (req, res) => {
         <td>${r.dibujo || ""}</td>
         <td>${r.valor || ""}</td>
         <td>${r.categoria || ""}</td>
+        <td>${r.premio || ""}</td>
         <td>${r.fecha.toISOString().split("T")[0]}</td>
         <td>${links}</td>
       </tr>`;
@@ -157,21 +158,19 @@ app.get("/admin", async (req, res) => {
     <table>
       <tr>
         <th>#</th><th>Colaborador</th><th>Cédula</th><th>Niño(a)</th><th>Parentesco</th>
-        <th>Edad</th><th>Dibujo</th><th>Valor</th><th>Categoría</th><th>Fecha</th><th>Fotos</th>
+        <th>Edad</th><th>Dibujo</th><th>Valor</th><th>Categoría</th><th>Premio</th><th>Fecha</th><th>Fotos</th>
       </tr>${rows}
     </table>
   </body></html>`);
 });
 
 // --- Exportar Excel con 4 hipervínculos ---
-// --- Exportar Excel con 4 hipervínculos funcionales ---
 app.get("/admin/export", async (req, res) => {
   try {
     const respuestas = (await pool.query("SELECT * FROM respuestas ORDER BY id")).rows;
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet("Respuestas");
 
-    // Encabezados
     sheet.columns = [
       { header: "#", key: "num", width: 5 },
       { header: "Colaborador", key: "colaborador", width: 25 },
@@ -182,6 +181,7 @@ app.get("/admin/export", async (req, res) => {
       { header: "Dibujo", key: "dibujo", width: 15 },
       { header: "Valor", key: "valor", width: 15 },
       { header: "Categoría", key: "categoria", width: 15 },
+      { header: "Premio", key: "premio", width: 20 },
       { header: "Fecha", key: "fecha", width: 15 },
       { header: "Foto 1", key: "foto1", width: 30 },
       { header: "Foto 2", key: "foto2", width: 30 },
@@ -194,7 +194,6 @@ app.get("/admin/export", async (req, res) => {
       const imgs = await pool.query("SELECT id FROM imagenes WHERE respuesta_id=$1 LIMIT 4", [r.id]);
       const baseUrl = `${req.protocol}://${req.get("host")}/api/img/`;
 
-      // Crear fila
       const rowValues = {
         num: i + 1,
         colaborador: r.nombrecolaborador,
@@ -205,10 +204,10 @@ app.get("/admin/export", async (req, res) => {
         dibujo: r.dibujo,
         valor: r.valor,
         categoria: r.categoria,
+        premio: r.premio,
         fecha: r.fecha.toISOString().split("T")[0],
       };
 
-      // Asignar hipervínculos a cada columna de foto
       imgs.rows.forEach((img, idx) => {
         rowValues[`foto${idx + 1}`] = { text: `Foto ${idx + 1}`, hyperlink: baseUrl + img.id };
       });
@@ -228,13 +227,14 @@ app.get("/admin/export", async (req, res) => {
 
 app.get("/admin/erase/cuidado/87654321", async (req, res) => {
   try {
-    await pool.query("DELETE FROM imagenes");
-    await pool.query("DELETE FROM respuestas");
-    res.json({ ok: true, msg: "Datos borrados correctamente" });
+    await pool.query("DROP TABLE IF EXISTS imagenes");
+    await pool.query("DROP TABLE IF EXISTS respuestas");
+    res.json({ ok: true, msg: "Tablas eliminadas correctamente" });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ ok: false, msg: "Error al borrar los datos" });
+    res.status(500).json({ ok: false, msg: "Error al eliminar las tablas" });
   }
 });
+
 
 app.listen(PORT, () => console.log(`Servidor en http://localhost:${PORT}`));

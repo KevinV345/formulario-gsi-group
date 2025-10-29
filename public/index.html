@@ -6,30 +6,21 @@
     <title>Formulario GSI GROUP SAS</title>
     <link rel="icon" type="image/png" href="/favicon.png">
     <style>
-        /* Variables CSS para facilitar el cambio de colores */
         :root {
             --primary-color: #007bff;
-            /* Azul vibrante */
             --secondary-color: #6c757d;
-            /* Gris para textos */
             --light-bg: #f8f9fa;
-            /* Fondo claro */
             --border-color: #ced4da;
-            /* Color de borde de campos */
             --success-color: #28a745;
-            /* Verde para éxito o botones de envío */
         }
 
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             max-width: 650px;
-            /* Un poco más ancho */
             margin: 30px auto;
-            /* Más margen superior/inferior */
             padding: 30px;
             background-color: var(--light-bg);
             color: #343a40;
-            /* Color de texto principal oscuro */
         }
 
         h2 {
@@ -45,18 +36,14 @@
             padding: 25px;
             border-radius: 12px;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-            /* Sombra suave */
         }
 
         label {
             display: block;
             margin-top: 15px;
-            /* Más espacio */
             margin-bottom: 5px;
             font-weight: 600;
-            /* Ligeramente más grueso */
             color: #495057;
-            /* Un color de etiqueta más suave */
         }
 
         input:not([type="checkbox"]),
@@ -64,13 +51,10 @@
         select {
             width: 100%;
             padding: 10px 12px;
-            /* Más padding para altura */
             margin-top: 4px;
             border: 1px solid var(--border-color);
             border-radius: 6px;
-            /* Bordes redondeados */
             box-sizing: border-box;
-            /* Asegura que el padding no aumente el ancho */
             transition: border-color 0.3s, box-shadow 0.3s;
         }
 
@@ -79,30 +63,23 @@
         select:focus {
             border-color: var(--primary-color);
             box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
-            /* Resaltado al enfocar */
             outline: none;
         }
 
-        /* Estilo específico para el campo de archivo */
         input[type="file"] {
             border: 1px dashed var(--border-color);
-            /* Borde punteado para archivos */
             background-color: var(--light-bg);
             padding: 12px;
         }
 
-
         textarea {
             resize: vertical;
-            /* Permite redimensionar solo verticalmente */
             min-height: 80px;
         }
 
-        /* Estilo del botón de envío */
         button {
             display: block;
             width: 100%;
-            /* Botón de ancho completo */
             margin-top: 25px;
             padding: 12px 15px;
             font-size: 16px;
@@ -117,12 +94,10 @@
 
         button:hover {
             background-color: #218838;
-            /* Color un poco más oscuro al pasar el ratón */
         }
 
         button:active {
             transform: translateY(1px);
-            /* Efecto de "presionado" */
         }
 
         button:disabled {
@@ -161,12 +136,15 @@
         <textarea name="valor" rows="3" required placeholder="Explica tu elección..."></textarea>
 
         <label>9. Categoría:</label>
-        <select name="categoria" required>
+        <select name="categoria" id="categoria" required>
             <option value="" disabled selected>Selecciona una categoría por edad</option>
             <option value="I">Categoria I (4-6 años)</option>
             <option value="II">Categoria II (7-9 años)</option>
             <option value="III">Categoria III (10-12 años)</option>
         </select>
+
+        <label id="premioLabel" style="display:none;">10. Premio:</label>
+        <select name="premio" id="premio" style="display:none;"></select>
 
         <button id="submitBtn" type="submit">Enviar Formulario</button>
     </form>
@@ -175,26 +153,24 @@
         const form = document.getElementById('form');
         const fotosInput = document.getElementById('fotos');
         const submitBtn = document.getElementById('submitBtn');
+
         form.addEventListener('submit', async e => {
             e.preventDefault();
             submitBtn.disabled = true;
 
-            // Validación: exactamente 4 fotos
             const files = fotosInput.files;
             if (!files || files.length !== 4) {
                 alert('Debes seleccionar exactamente 4 fotos.');
                 submitBtn.disabled = false;
-                return; // NO borra nada del formulario
+                return;
             }
 
-            // Validación HTML5 básica (puedes expandir si quieres)
             if (!form.checkValidity()) {
                 alert('Completa todos los campos requeridos.');
                 submitBtn.disabled = false;
                 return;
             }
 
-            // Enviar
             try {
                 const fd = new FormData(form);
                 const res = await fetch('/api/form', { method: 'POST', body: fd });
@@ -207,10 +183,47 @@
                 alert(json.msg || 'Enviado correctamente');
                 submitBtn.disabled = false;
                 form.reset();
+                // Ocultar premio nuevamente al resetear
+                document.getElementById('premio').style.display = 'none';
+                document.getElementById('premioLabel').style.display = 'none';
             } catch (err) {
                 console.error(err);
                 alert('Error al enviar el formulario');
                 submitBtn.disabled = false;
+            }
+        });
+
+        const categoriaSelect = document.getElementById('categoria');
+        const premioSelect = document.getElementById('premio');
+        const premioLabel = document.getElementById('premioLabel');
+
+        categoriaSelect.addEventListener('change', () => {
+            const cat = categoriaSelect.value;
+            premioSelect.innerHTML = '';
+            if (cat === 'I') {
+                premioSelect.style.display = 'block';
+                premioLabel.style.display = 'block';
+                premioSelect.innerHTML = `
+                    <option value="Kit creativo">Kit creativo (Colores, temperas, plastilina, pinceles, stickers, cuadernos, libro para colorear, etc)</option>
+                    <option value="Juego didactico">Juego didáctico</option>
+                `;
+            } else if (cat === 'II') {
+                premioSelect.style.display = 'block';
+                premioLabel.style.display = 'block';
+                premioSelect.innerHTML = `
+                    <option value="Kit creativo">Kit creativo (Colores, temperas, plastilina, pinceles, stickers, cuadernos, libro para colorear, etc)</option>
+                    <option value="Juego didactico">Juego didáctico</option>
+                `;
+            } else if (cat === 'III') {
+                premioSelect.style.display = 'block';
+                premioLabel.style.display = 'block';
+                premioSelect.innerHTML = `
+                    <option value="Bono restaurante">Bono de restaurante</option>
+                    <option value="Bono cine">Bono de cine</option>
+                `;
+            } else {
+                premioSelect.style.display = 'none';
+                premioLabel.style.display = 'none';
             }
         });
     </script>
