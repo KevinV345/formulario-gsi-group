@@ -1,0 +1,19 @@
+[
+  {
+    "nombreColaborador": "123",
+    "cedula": "123",
+    "nombreNino": "123",
+    "parentesco": "123",
+    "edad": "123",
+    "fotos": [
+      "/uploads/1761767117681-117543861.png",
+      "/uploads/1761767117684-751913589.jpg",
+      "/uploads/1761767117692-50282100.png",
+      "/uploads/1761767117693-877832791.png"
+    ],
+    "dibujo": "123",
+    "valor": "123",
+    "categoria": "I",
+    "fecha": "2025-10-29T19:45:17.701Z"
+  }
+]
